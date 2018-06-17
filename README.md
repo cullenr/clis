@@ -45,6 +45,10 @@ modulation config when it is created but may become available later. We can also
 offer somthing like jack_connect but this is slighty more cumbersome than the
 proposed UI:
 
+* check how the port metadata system works so that we can pass additional info 
+with ports such as default values for modulation amplitude (eg. a keyboard
+device where amplitude 1 means keyfollow)
+
 ## API
 
 ```
@@ -52,11 +56,59 @@ osc -n lfo -f 2         # use an oscilator as a 2hz lfo
 osc -f 200 -f lfo:1     # modulate a 200hz oscilators freq using the 2hz lfo
 ```
 
-| gen    |                              |
-|--------|------------------------------|-
-| osc    | mode, freq, sync, pw         | audio
-| adsr   | a, d, s, r, loop             | control
-| filter | mode, freq, res, drive       | audio
-| envfol | sensitivity                  | control
-| seq    | 
-| gate   |
+| gen    | parameters                   | type    |
+|--------|------------------------------|---------|
+| osc    | mode, freq, sync, pw         | audio   |
+| adsr   | a, d, s, r, loop             | control |
+| filter | mode, freq, res, drive       | audio   |
+| envfol | sensitivity                  | control |
+| seq    | tbc                          | tbc     |
+| gate   | tbc                          | tbc     |
+
+#### Parameters
+
+Paramters can be set to a static value or modulated by multiple sources or a
+combination of both. An example of an oscillator set to 220hz modulated by an
+lfo and a sequencer.
+
+```shell
+# a 1hz oscillator named 'lfo'
+osc lfo -f 1 &
+
+# a sequencer named 'notes' which steps each time 'lfo' crosses 0 (60bpm)
+cat notes.txt | seq notes -t lfo:0 &
+
+# an oscillator tuned to 220hz modulated by an lfo and a sequencer
+osc -f 220 -f lfo:0.01 -f seq:1 -p
+```
+
+##### Syntax
+
+client              = string
+port                = string
+value               = float
+
+value               = float
+client              = string
+client:value        = string:float
+client:port         = string:string
+client:port:value   = string:string:float
+
+
+### Alternative Syntax?
+
+how could we do this? what does stdout produce?
+
+stdout could produce config in the form of text. we could add a shebang to the 
+config.
+
+we could use bitfmt_misc to make executables
+
+how does osc fork in the sample below.
+```
+osc -f 1 > lfo
+lfo | seq
+lfo | osc
+```
+
+
