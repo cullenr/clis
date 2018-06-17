@@ -25,14 +25,13 @@ typedef struct mod_source_arr {
 
 typedef struct parameter {
     float value;
-    mod_source_arr modulators;
+    mod_source_arr mods;
 } parameter;
 
 jack_port_t *input_port, *output_port;
 jack_client_t *client;
 float amt = 0.1;
-float freq = 200;
-mod_source_arr freq_mods_arr = {0, NULL};
+parameter freq = {200, {0, NULL}};
 
 static void 
 die(int status)
@@ -40,10 +39,10 @@ die(int status)
     // dont do this! we are using optarg to set them, maybe we should use strdup
     // so that we can do this?
     //unsigned int i;
-    //for(i = 0; i < freq_mods_arr.length; i++) {
-    //    free(freq_mods_arr.sources[i].name);
+    //for(i = 0; i < freq.mods.length; i++) {
+    //    free(freq.mods.sources[i].name);
     //}
-    free(freq_mods_arr.sources);
+    free(freq.mods.sources);
 
     exit(status);
 }
@@ -102,7 +101,7 @@ get_mod_buffer(jack_nframes_t nframes, mod_source_arr *mods)
 
         for(i = 0; i < mods->length; i++) {
             mod = (jack_default_audio_sample_t*)
-                   jack_port_get_buffer(mods->sources[0].port, nframes);
+                   jack_port_get_buffer(mods->sources[i].port, nframes);
             for(j = 0; j < nframes; j++) {
                 out[j] += mod[j] * amt * 44100;// TODO dynamic sample rate
             }
@@ -134,17 +133,21 @@ int process(jack_nframes_t nframes, void *arg)
     unsigned int i;
 
     out = (jack_default_audio_sample_t*)jack_port_get_buffer(output_port, nframes);
-    mod = get_mod_buffer(nframes, &freq_mods_arr);
+    mod = get_mod_buffer(nframes, &freq.mods);
 
-    for(i = 0; i < nframes; i++)
-    {
-        // TODO: make saw a struct that contains a generic set freq function
-        // and a union of waveform types so that we can support multiple 
-        // waveforms more easily
-
-        tSawtoothSetFreq(saw, freq + mod[i]);
-        float val = tSawtoothTick(saw);
-        out[i] = val;
+    // TODO: make saw a struct that contains a generic set freq function
+    // and a union of waveform types so that we can support multiple 
+    // waveforms more easily
+    if(mod) {
+        for(i = 0; i < nframes; i++) {
+            tSawtoothSetFreq(saw, freq.value + mod[i]);
+            out[i] = tSawtoothTick(saw);
+        }
+    } else {
+        tSawtoothSetFreq(saw, freq.value);
+        for(i = 0; i < nframes; i++) {
+            out[i] = tSawtoothTick(saw);
+        }
     }
 
     free(mod);
@@ -202,19 +205,19 @@ main (int argc, char *argv[])
             options = JackNullOption | JackServerName;
             break;
         case 'f':
-            freq = atoi(optarg);
+            freq.value = atoi(optarg);
             break;
         case 'm': {
             // this is where we need to add to a list of mod sources
-            mod_source *tmp = realloc(freq_mods_arr.sources, (freq_mods_arr.length + 1) * sizeof *tmp);
+            mod_source *tmp = realloc(freq.mods.sources, (freq.mods.length + 1) * sizeof *tmp);
             if(tmp == NULL) {
                 fprintf(stderr, "could not allocate mod source");
                 die(1);
             }
-            freq_mods_arr.sources = tmp;
-            freq_mods_arr.sources[freq_mods_arr.length].name = optarg;
-            freq_mods_arr.sources[freq_mods_arr.length].port = NULL; // too early to find_port(optarg);
-            freq_mods_arr.length++;
+            freq.mods.sources = tmp;
+            freq.mods.sources[freq.mods.length].name = optarg;
+            freq.mods.sources[freq.mods.length].port = NULL; // too early to find_port(optarg);
+            freq.mods.length++;
             printf("added mod source %s\n", optarg);
             break;
         }
@@ -250,8 +253,8 @@ main (int argc, char *argv[])
     }
 
     OOPSInit((float)jack_get_sample_rate(client), &frandom);
+    
     data = tSawtoothInit();
-    tSawtoothSetFreq(data, freq);
 
     jack_set_process_callback(client, process, data);
     jack_set_sample_rate_callback(client, set_sample_rate, 0);
@@ -274,8 +277,8 @@ main (int argc, char *argv[])
         exit (1);
     }
 
-    for(unsigned int i = 0; i < freq_mods_arr.length; i++) {
-        freq_mods_arr.sources[i].port = find_port(freq_mods_arr.sources[i].name);
+    for(unsigned int i = 0; i < freq.mods.length; i++) {
+        freq.mods.sources[i].port = find_port(freq.mods.sources[i].name);
     }
 
     /* Connect the ports.  You can't do this before the client is
