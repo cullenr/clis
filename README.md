@@ -36,18 +36,10 @@ sudo usermod -a -G audio $(whoami)
 
 ## TODO
 
-* f̶i̶n̶d̶ ̶o̶u̶t̶ ̶w̶h̶y̶ ̶s̶i̶m̶p̶l̶e̶ ̶c̶l̶i̶e̶n̶t̶ ̶f̶r̶o̶m̶ ̶j̶a̶c̶k̶2̶ ̶p̶l̶a̶y̶s̶ ̶a̶ ̶s̶o̶u̶n̶d̶ ̶w̶h̶e̶r̶e̶a̶s̶ ̶t̶h̶e̶ ̶m̶i̶d̶i̶s̶i̶n̶e̶ ̶
-n̶e̶e̶d̶s̶ ̶t̶o̶ ̶b̶e̶ ̶p̶a̶t̶c̶h̶e̶d̶ ̶t̶o̶ ̶t̶h̶e̶ ̶m̶a̶i̶n̶ ̶o̶u̶t̶  `jack_connect` is called
-
-* get a port registration callback working - we need to dynamically hook up
-ports to allow circular modulation paths. Some ports may not exist in a devices
-modulation config when it is created but may become available later. We can also
-offer somthing like jack_connect but this is slighty more cumbersome than the
-proposed UI:
-
 * check how the port metadata system works so that we can pass additional info 
 with ports such as default values for modulation amplitude (eg. a keyboard
 device where amplitude 1 means keyfollow)
+* fix up makefile so it does not build all of the lib folder
 
 ## API
 
