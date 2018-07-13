@@ -7,7 +7,9 @@
 
 #define DEFAULT_PORT   "output"
 
-clis_rc clis_init(char *client_name, char *server_name, jack_client_t **client)
+
+clis_rc 
+clis_init_client(char *client_name, char *server_name, jack_client_t **client)
 {
     jack_status_t   status;
     jack_options_t  options = server_name
@@ -32,17 +34,55 @@ clis_rc clis_init(char *client_name, char *server_name, jack_client_t **client)
     return CLIS_OK;
 }
 
-clis_rc clis_start(jack_client_t *client, parameter **params, size_t nparams)
+static void 
+port_registered(jack_port_id_t port_id, int is_registering, void *arg)
 {
-    if (jack_activate(client)) {
+
+    printf("PORT %s : %p, %i\n", is_registering ? "REGISTERED" : "UNREGISTER", 
+            port_id, is_registering);
+
+    clis_context *context = (clis_context *)arg;
+    parameter_arr *params_arr = context->params;
+
+    printf("client %p params %p\n", context->client, params_arr);
+
+    jack_port_t *port = jack_port_by_id(context->client, port_id);
+    const char *name = jack_port_name(port);
+
+    printf("%s %p\n", name, port);
+
+    for(unsigned int i = 0; i < params_arr->length; i++) {
+        parameter *param = params_arr->params[i];
+        for(unsigned int j = 0; j < param->mods.length; j++) {
+            if(strcmp(param->mods.sources[j].name, name) == 0) {
+                param->mods.sources[j].port = is_registering ? port : NULL;
+                printf("CALLBACK added mod source %s : %p\n", 
+                        param->mods.sources[j].name, port);
+            }
+        }
+    }
+
+}
+
+clis_rc clis_start(clis_context *context) {
+    jack_set_port_registration_callback(context->client, port_registered,
+            context);
+
+    if (jack_activate(context->client)) {
         return CLIS_E_CLIENT_ACTIVATE;
     }
- 
-    for(unsigned int i = 0; i < nparams; i++) {
-        parameter *param = params[i];
+
+    for(unsigned int i = 0; i < context->params->length; i++) {
+        parameter *param = context->params->params[i];
         for(unsigned int j = 0; j < param->mods.length; j++) {
-            // TODO : replace find_port with jack_find_port
-            param->mods.sources[j].port = jack_port_by_name(client, param->mods.sources[j].name);
+            jack_port_t *port = jack_port_by_name(context->client, 
+                    param->mods.sources[j].name);
+
+            if(port == NULL)
+                continue;
+
+            param->mods.sources[j].port = port;
+            printf("INIT added mod source %s : %p\n", param->mods.sources[j].name, param->mods.sources[j].port);
         }
     }
 
@@ -53,7 +93,7 @@ clis_rc clis_start(jack_client_t *client, parameter **params, size_t nparams)
  *  Make sure that the client is activated before calling this function. Ports
  *  cannot be connected if they are not running.
  */
-clis_rc play_audio(jack_client_t *client, jack_port_t *output_port)
+clis_rc clis_play_audio(jack_client_t *client, jack_port_t *output_port)
 {
     const char **ports = jack_get_ports(client, NULL, NULL, 
             JackPortIsPhysical|JackPortIsInput);
@@ -161,7 +201,7 @@ static mod_source *add_mod_source(parameter *param)
  *  modulation sources array.
  * @return 0 on success or an error code according to clis_rc
  */
-clis_rc parse_param_string(char *arg, parameter *param)
+clis_rc clis_parse_param_string(char *arg, parameter *param)
 {
     mod_source *mod = NULL;
     char  client[32];
@@ -208,7 +248,7 @@ clis_rc parse_param_string(char *arg, parameter *param)
  *
  *  @param - the parameter to free
  */
-void free_param_mods(parameter *param)
+void clis_free_param_mods(parameter *param)
 {
     unsigned int i;
     for(i = 0; i < param->mods.length; i++) {
@@ -262,15 +302,20 @@ void free_param_mods(parameter *param)
  *  @return - a pointer to the sampled buffer, the caller must free the buffer
  */
 jack_default_audio_sample_t *
-get_mod_buffer(jack_nframes_t nframes, mod_source_arr *mods)
+clis_get_mod_buffer(jack_nframes_t nframes, mod_source_arr *mods)
 {
     unsigned int i, j;
     jack_default_audio_sample_t *out = NULL, *mod = NULL;
+    jack_port_t *port;
 
     if(mods->length > 0) {
         out = calloc(nframes, sizeof *out); 
 
         for(i = 0; i < mods->length; i++) {
+            port = mods->sources[i].port;
+            // ports may not be registered yet
+            if (port == NULL)
+                continue;
             mod = (jack_default_audio_sample_t*)
                    jack_port_get_buffer(mods->sources[i].port, nframes);
             for(j = 0; j < nframes; j++) {
@@ -278,6 +323,7 @@ get_mod_buffer(jack_nframes_t nframes, mod_source_arr *mods)
                 out[j] += mod[j] * mods->sources[i].value * 44100;
             }
         }
+
     }
 
     return out;
