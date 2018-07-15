@@ -104,10 +104,10 @@ int main (int argc, char *argv[])
 
     while ((opt = getopt(argc, argv, "n:s:f:p")) != -1) {
         switch (opt) {
-            case 'n': client_name = optarg;                     break;
-            case 's': server_name = optarg;                     break;
-            case 'f': rc = clis_parse_param_string(optarg, &freq);   break;
-            case 'p': play = true;                              break;
+            case 'n': client_name = optarg;                         break;
+            case 's': server_name = optarg;                         break;
+            case 'f': rc = clis_parse_param_string(optarg, &freq);  break;
+            case 'p': play = true;                                  break;
             default: {
                 fprintf(stderr, "Usage: %s TBC \n", argv[0]);
                 exit(EXIT_FAILURE);

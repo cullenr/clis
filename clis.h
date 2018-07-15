@@ -34,7 +34,7 @@ typedef struct parameter {
 
 typedef struct parameter_arr {
     size_t length;
-    parameter **params; // TODO : why not make this just a * like mod_source_arr
+    parameter **params; // TODO : why not make this just a single pointer? 
 } parameter_arr;
 
 typedef struct clis_context {
