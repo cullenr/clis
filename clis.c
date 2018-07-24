@@ -94,7 +94,8 @@ clis_start(clis_context *context) {
 
     return CLIS_OK;
 }
-/** Connect the output port to the hardware ports 
+/**
+ * Connect the output port to the hardware ports 
  *
  *  Make sure that the client is activated before calling this function. Ports
  *  cannot be connected if they are not running.
