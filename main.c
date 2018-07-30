@@ -15,9 +15,9 @@
 #include "clis.h"
 
 typedef struct my_context {
-    struct clis_context;
+    clis_context;
     bool play;
-};
+} my_context;
 
 jack_port_t     *output_port;
 parameter        freq = {
@@ -82,7 +82,7 @@ static int on_sample_rate(jack_nframes_t nframes, my_context *ctx)
     return 0;
 }
 
-static void on_clis_init(my_context *ctx)
+static void on_init(my_context *ctx)
 {
     srand((unsigned int)time(NULL));
     OOPSInit((float)jack_get_sample_rate(ctx->client), &frandom);
@@ -94,13 +94,14 @@ static void on_clis_init(my_context *ctx)
 
     if (output_port == NULL) {
         fprintf(stderr, "no more JACK ports available\n");
-        die(1);
+        clis_exit(1);
     }
 }
 
-static void on_clis_start(my_context *ctx)
+static void on_start(my_context *ctx)
 {
     if (ctx->play) {
+	    printf("play audio");
         clis_play_audio(ctx->client, output_port);
     }
 }
@@ -111,15 +112,16 @@ int main (int argc, char *argv[])
     bool       play = false;
     clis_rc    rc = CLIS_OK;
 
-    clis_set_init_cb(&on_clis_init);
-    clis_set_exit_cb(&on_clis_exit);
-    clis_set_process_cb(&on_clis_process);
-    clis_set_sample_rate_cb(&on_clis_sample_rate);
+    clis_set_init_cb(&on_init);
+    clis_set_exit_cb(&on_exit);
+    clis_set_start_cb(&on_start);
+    clis_set_process_cb(&on_process);
+    clis_set_sample_rate_cb(&on_sample_rate);
 
     while ((opt = getopt(argc, argv, "f:p")) != -1) {
         switch (opt) {
-            case 'f': rc = clis_parse_param_string(optarg, &freq);  break;
-            case 'p': context->play = true;                         break;
+            case 'f': rc = clis_parse_param_string(optarg, &freq); break;
+            case 'p': context.play = true;                         break;
             default: {
                 fprintf(stderr, "Usage: %s TBC \n", argv[0]);
                 exit(EXIT_FAILURE);
@@ -128,7 +130,7 @@ int main (int argc, char *argv[])
 
         if (rc) {
             fprintf(stderr, "%s:%s", optarg, clis_rc_string(rc));
-            die(1);
+            exit(EXIT_FAILURE);
         }
     }
 
