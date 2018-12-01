@@ -7,32 +7,6 @@
 
 #define DEFAULT_PORT   "output"
 
-clis_rc 
-clis_init_client(char *client_name, char *server_name, jack_client_t **client)
-{
-    jack_status_t   status;
-    jack_options_t  options = server_name
-        ? JackNullOption
-        : JackNullOption | JackServerName;
-    
-    *client = jack_client_open(client_name, options, &status, server_name);
-
-    if (*client == NULL) {
-        // TODO: add verbose logging mode
-        // fprintf (stderr, "jack_client_open() failed, status = 0x%2.0x\n", 
-        //         status);
-        if (status & JackServerFailed) {
-            return CLIS_E_JACK_CONNECT;
-        } else {
-            return CLIS_E_JACK_CLIENT_OPEN;
-        }
-    } else if (status & JackNameNotUnique) {
-        return CLIS_E_NAME_TAKEN;
-    }
-
-    return CLIS_OK;
-}
-
 static void
 port_registered(jack_port_id_t port_id, int is_registering, void *arg)
 {
@@ -60,99 +34,6 @@ port_registered(jack_port_id_t port_id, int is_registering, void *arg)
         }
     }
 
-}
-
-clis_rc
-clis_start(clis_context *context) {
-    unsigned int i, j;
-    
-    jack_set_port_registration_callback(context->client, port_registered,
-            context);
-
-    if (jack_activate(context->client)) {
-        return CLIS_E_CLIENT_ACTIVATE;
-    }
-
-    for(i = 0; i < context->params->length; i++) {
-
-        parameter *param = context->params->params[i];
-
-        for(j = 0; j < param->mods.length; j++) {
-
-            jack_port_t *port = jack_port_by_name(context->client, 
-                    param->mods.sources[j].name);
-
-            if(port == NULL)
-                continue;
-
-            param->mods.sources[j].port = port;
-
-            printf("INIT added mod source %s : %p\n", 
-                    param->mods.sources[j].name, param->mods.sources[j].port);
-        }
-    }
-
-    return CLIS_OK;
-}
-/** Connect the output port to the hardware ports 
- *
- *  Make sure that the client is activated before calling this function. Ports
- *  cannot be connected if they are not running.
- */
-clis_rc
-clis_play_audio(jack_client_t *client, jack_port_t *output_port)
-{
-    const char **ports = jack_get_ports(client, NULL, NULL, 
-            JackPortIsPhysical|JackPortIsInput);
-
-    if (ports == NULL) {
-        return CLIS_E_NO_OUTPUT_PORTS;
-    }
-
-    if (jack_connect (client, jack_port_name(output_port), ports[0])) {
-        return CLIS_E_CONNECT_OUTPUT_PORT;
-    }
-
-    if (jack_connect (client, jack_port_name(output_port), ports[1])) {
-        return CLIS_E_CONNECT_OUTPUT_PORT;
-    }
-
-    jack_free(ports);
-
-    return CLIS_OK;
-}
-
-/**
- *  return a human readable string for a clis_rc enum value
- *  
- *  @param rc - the clis_rc enum value to translate
- *  @return - a human readable response message
- */
-const char *
-clis_rc_string(clis_rc rc)
-{
-    switch(rc) {
-        case CLIS_OK:
-            return "status ok";
-        case CLIS_E_ALLOC_MOD: 
-            return "could not allocate new modulation source";
-        case CLIS_E_PARSE_PARAM: 
-            return "could not parse param string";
-        case CLIS_E_JACK_CLIENT_OPEN:
-            return "could not open jack client";
-        case CLIS_E_JACK_CONNECT:
-            return "Unable to connect to JACK server";
-        case CLIS_E_NAME_TAKEN:
-            return "client name already taken";
-        case CLIS_E_CLIENT_ACTIVATE:
-            return "could not activate client";
-        case CLIS_E_NO_OUTPUT_PORTS:
-            return "no physical playback ports";
-        case CLIS_E_CONNECT_OUTPUT_PORT:
-            return "cannot connect output ports\n";
-        default :
-            return "unkown error";
-    }
 }
 
 /**
@@ -194,6 +75,128 @@ add_mod_source(parameter *param)
     return &param->mods.sources[param->mods.length - 1];
 }
 
+clis_rc 
+clis_init_client(char *client_name, char *server_name, jack_client_t **client)
+{
+    jack_status_t   status;
+    jack_options_t  options = server_name
+        ? JackNullOption
+        : JackNullOption | JackServerName;
+    
+    *client = jack_client_open(client_name, options, &status, server_name);
+
+    if (*client == NULL) {
+        // TODO: add verbose logging mode
+        // fprintf (stderr, "jack_client_open() failed, status = 0x%2.0x\n", 
+        //         status);
+        if (status & JackServerFailed) {
+            return CLIS_E_JACK_CONNECT;
+        } else {
+            return CLIS_E_JACK_CLIENT_OPEN;
+        }
+    } else if (status & JackNameNotUnique) {
+        return CLIS_E_NAME_TAKEN;
+    }
+
+    return CLIS_OK;
+}
+
+clis_rc
+clis_start(clis_context *context) {
+    unsigned int i, j;
+    
+    jack_set_port_registration_callback(context->client, port_registered,
+            context);
+
+    if (jack_activate(context->client)) {
+        return CLIS_E_CLIENT_ACTIVATE;
+    }
+
+    for(i = 0; i < context->params->length; i++) {
+
+        parameter *param = context->params->params[i];
+
+        for(j = 0; j < param->mods.length; j++) {
+
+            jack_port_t *port = jack_port_by_name(context->client, 
+                    param->mods.sources[j].name);
+
+            if(port == NULL)
+                continue;
+
+            param->mods.sources[j].port = port;
+
+            printf("INIT added mod source %s : %p\n", 
+                    param->mods.sources[j].name, param->mods.sources[j].port);
+        }
+    }
+
+    return CLIS_OK;
+}
+
+/** 
+ * Connect the output port to the hardware ports 
+ *
+ * Make sure that the client is activated before calling this function. Ports
+ * cannot be connected if they are not running.
+ */
+clis_rc
+clis_play_audio(jack_client_t *client, jack_port_t *output_port)
+{
+    const char **ports = jack_get_ports(client, NULL, NULL, 
+            JackPortIsPhysical|JackPortIsInput);
+
+    if (ports == NULL) {
+        return CLIS_E_NO_OUTPUT_PORTS;
+    }
+
+    if (jack_connect (client, jack_port_name(output_port), ports[0])) {
+        return CLIS_E_CONNECT_OUTPUT_PORT;
+    }
+
+    if (jack_connect (client, jack_port_name(output_port), ports[1])) {
+        return CLIS_E_CONNECT_OUTPUT_PORT;
+    }
+
+    jack_free(ports);
+
+    return CLIS_OK;
+}
+
+/**
+ * return a human readable string for a clis_rc enum value
+ * 
+ * @param rc - the clis_rc enum value to translate
+ * @return - a human readable response message
+ */
+const char *
+clis_rc_string(clis_rc rc)
+{
+    switch(rc) {
+        case CLIS_OK:
+            return "status ok";
+        case CLIS_E_ALLOC_MOD: 
+            return "could not allocate new modulation source";
+        case CLIS_E_PARSE_PARAM: 
+            return "could not parse param string";
+        case CLIS_E_JACK_CLIENT_OPEN:
+            return "could not open jack client";
+        case CLIS_E_JACK_CONNECT:
+            return "Unable to connect to JACK server";
+        case CLIS_E_NAME_TAKEN:
+            return "client name already taken";
+        case CLIS_E_CLIENT_ACTIVATE:
+            return "could not activate client";
+        case CLIS_E_NO_OUTPUT_PORTS:
+            return "no physical playback ports";
+        case CLIS_E_CONNECT_OUTPUT_PORT:
+            return "cannot connect output ports\n";
+        default :
+            return "unkown error";
+    }
+}
+
+
 /**
  * Set the mod_source properties according to the arg string and the globally
  * defined defaults.
@@ -211,7 +214,8 @@ add_mod_source(parameter *param)
  *  modulation sources array.
  * @return 0 on success or an error code according to clis_rc
  */
-clis_rc clis_parse_param_string(char *arg, parameter *param)
+clis_rc 
+clis_parse_param_string(char *arg, parameter *param)
 {
     mod_source *mod = NULL;
     char  client[32];
@@ -250,22 +254,6 @@ clis_rc clis_parse_param_string(char *arg, parameter *param)
         return CLIS_E_PARSE_PARAM;
     }
     return 0;
-}
-
-/**
- *  free the parameters dynamically allocated modulation sources but not the
- *  parameter itself.
- *
- *  @param - the parameter to free
- */
-void 
-clis_free_param_mods(parameter *param)
-{
-    unsigned int i;
-    for(i = 0; i < param->mods.length; i++) {
-        free(param->mods.sources[i].name);
-    }
-    free(param->mods.sources);
 }
 
 // TODO : adapt this so that it works with midi sources and constant sources
@@ -309,3 +297,20 @@ clis_get_mod_buffer(jack_nframes_t nframes, mod_source_arr *mods)
 
     return out;
 }
+
+/**
+ *  free the parameters dynamically allocated modulation sources but not the
+ *  parameter itself.
+ *
+ *  @param - the parameter to free
+ */
+void 
+clis_free_param_mods(parameter *param)
+{
+    unsigned int i;
+    for(i = 0; i < param->mods.length; i++) {
+        free(param->mods.sources[i].name);
+    }
+    free(param->mods.sources);
+}
+

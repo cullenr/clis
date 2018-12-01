@@ -15,7 +15,6 @@
 #include "clis.h"
 
 jack_port_t     *output_port;
-jack_client_t   *client;
 parameter        freq = {
     .value = 200, 
     .mods = {0, NULL}
@@ -30,19 +29,20 @@ clis_context context = {
 
 static void die(int status)
 {
-    // TODO : make this use the parameter_arr:
-    // free_params(&params);
-    clis_free_param_mods(&freq);
+    unsigned int i =  0;
+    for(i = 0; i < params.length; i++) {
+        clis_free_param_mods(params.params[i]);
+    }
     exit(status);
 }
 
 static void signal_handler(int sig)
 {
-    jack_client_close(client);
+    jack_client_close(context.client);
     die(sig);
 }
 
-void jack_shutdown (void *arg)
+static void jack_shutdown (void *arg)
 {
     (void)arg;
 
@@ -50,12 +50,12 @@ void jack_shutdown (void *arg)
     die(1);
 }
 
-float frandom(void)
+static float frandom(void)
 {
     return (float)rand() / (float)(RAND_MAX);
 }
 
-int process(jack_nframes_t nframes, void *arg)
+static int process(jack_nframes_t nframes, void *arg)
 {
     jack_default_audio_sample_t *out, *mod;
     tSawtooth *saw = (tSawtooth*)arg;
@@ -84,7 +84,7 @@ int process(jack_nframes_t nframes, void *arg)
     return 0;      
 }
 
-int set_sample_rate(jack_nframes_t nframes, void *arg)
+static int set_sample_rate(jack_nframes_t nframes, void *arg)
 {
     (void)arg;
 
@@ -120,22 +120,22 @@ int main (int argc, char *argv[])
         }
     }
 
-    rc = clis_init_client(client_name, server_name, &client);
+    rc = clis_init_client(client_name, server_name, &context.client);
     if(rc) {
         fprintf(stderr, "%s", clis_rc_string(rc));
         die(1);
     }
 
+    jack_set_process_callback(context.client, process, data);
+    jack_set_sample_rate_callback(context.client, set_sample_rate, 0);
+    jack_on_shutdown(context.client, jack_shutdown, 0); // signals server exited
+
     srand((unsigned int)time(NULL));
-    OOPSInit((float)jack_get_sample_rate(client), &frandom);
+    OOPSInit((float)jack_get_sample_rate(context.client), &frandom);
 
     data = tSawtoothInit();
 
-    jack_set_process_callback(client, process, data);
-    jack_set_sample_rate_callback(client, set_sample_rate, 0);
-    jack_on_shutdown(client, jack_shutdown, 0); // signals server exited
-
-    output_port = jack_port_register (client, "output",
+    output_port = jack_port_register (context.client, "output",
             JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
 
     if (output_port == NULL) {
@@ -143,11 +143,10 @@ int main (int argc, char *argv[])
         die(1);
     }
 
-    context.client = client;
     clis_start(&context);
 
     if (play) {
-        clis_play_audio(client, output_port);
+        clis_play_audio(context.client, output_port);
     }
 
     signal(SIGQUIT, signal_handler);
