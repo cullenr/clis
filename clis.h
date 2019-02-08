@@ -38,7 +38,7 @@ typedef struct parameter_arr {
 } parameter_arr;
 
 typedef struct clis_context {
-    parameter_arr *params;;
+    parameter_arr *params;
     jack_client_t *client;
 } clis_context;
 

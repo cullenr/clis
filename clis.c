@@ -104,14 +104,20 @@ clis_init_client(char *client_name, char *server_name, jack_client_t **client)
 clis_rc
 clis_start(clis_context *context) {
     unsigned int i, j;
-    
+
+    // make sure we can add modulation parameter ports when they are created
+    // in future.
     jack_set_port_registration_callback(context->client, port_registered,
             context);
 
+    // at this point all of the jack callbacks should be registered and so it is
+    // safe to 'activate' the client
     if (jack_activate(context->client)) {
         return CLIS_E_CLIENT_ACTIVATE;
     }
 
+    // attempt to find jack ports that have been registered by other processes
+    // and add them to the parameters array so they can be processed as inputs
     for(i = 0; i < context->params->length; i++) {
 
         parameter *param = context->params->params[i];
@@ -182,7 +188,7 @@ clis_rc_string(clis_rc rc)
         case CLIS_E_JACK_CLIENT_OPEN:
             return "could not open jack client";
         case CLIS_E_JACK_CONNECT:
-            return "Unable to connect to JACK server";
+            return "unable to connect to JACK server";
         case CLIS_E_NAME_TAKEN:
             return "client name already taken";
         case CLIS_E_CLIENT_ACTIVATE:

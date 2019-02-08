@@ -27,22 +27,27 @@ clis_context context = {
     .params = &params
 };
 
-static void die(int status)
+static void
+die(int status)
 {
-    unsigned int i =  0;
-    for(i = 0; i < params.length; i++) {
+    int i;
+    for(i = 0; i < context.params->length; i++) {
+        printf("free dem params");
         clis_free_param_mods(params.params[i]);
     }
+
     exit(status);
 }
 
-static void signal_handler(int sig)
+static void
+signal_handler(int sig)
 {
     jack_client_close(context.client);
-    die(sig);
+    die(0);
 }
 
-static void jack_shutdown (void *arg)
+static void
+jack_shutdown (void *arg)
 {
     (void)arg;
 
@@ -50,12 +55,14 @@ static void jack_shutdown (void *arg)
     die(1);
 }
 
-static float frandom(void)
+static float
+frandom(void)
 {
     return (float)rand() / (float)(RAND_MAX);
 }
 
-static int process(jack_nframes_t nframes, void *arg)
+static int
+process(jack_nframes_t nframes, void *arg)
 {
     jack_default_audio_sample_t *out, *mod;
     tSawtooth *saw = (tSawtooth*)arg;
@@ -81,10 +88,11 @@ static int process(jack_nframes_t nframes, void *arg)
 
     free(mod);
 
-    return 0;      
+    return 0;
 }
 
-static int set_sample_rate(jack_nframes_t nframes, void *arg)
+static int
+set_sample_rate(jack_nframes_t nframes, void *arg)
 {
     (void)arg;
 
@@ -126,14 +134,13 @@ int main (int argc, char *argv[])
         die(1);
     }
 
+    srand((unsigned int)time(NULL));
+    OOPSInit((float)jack_get_sample_rate(context.client), &frandom);
+    data = tSawtoothInit();
+
     jack_set_process_callback(context.client, process, data);
     jack_set_sample_rate_callback(context.client, set_sample_rate, 0);
     jack_on_shutdown(context.client, jack_shutdown, 0); // signals server exited
-
-    srand((unsigned int)time(NULL));
-    OOPSInit((float)jack_get_sample_rate(context.client), &frandom);
-
-    data = tSawtoothInit();
 
     output_port = jack_port_register (context.client, "output",
             JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
