@@ -91,21 +91,20 @@ port_registered(jack_port_id_t port_id, int is_registering, void *arg)
 
     unsigned int i, j;
     clis_context *context       = (clis_context *)arg;
-    parameter_arr *params_arr   = context->params;
     jack_port_t *port           = jack_port_by_id(context->client, port_id);
     const char *name            = jack_port_name(port);
 
-    for(i = 0; i < params_arr->length; i++) {
+    for(i = 0; i < context->params_length; i++) {
 
-        parameter *param = params_arr->params[i];
+        parameter param = context->params[i];
 
-        for(j = 0; j < param->mods.length; j++) {
+        for(j = 0; j < param.mods.length; j++) {
 
-            if(strcmp(param->mods.sources[j].name, name) == 0) {
+            if(strcmp(param.mods.sources[j].name, name) == 0) {
 
-                param->mods.sources[j].port = is_registering ? port : NULL;
+                param.mods.sources[j].port = is_registering ? port : NULL;
                 printf("CALLBACK added mod source %s : %p\n", 
-                        param->mods.sources[j].name, port);
+                        param.mods.sources[j].name, port);
             }
         }
     }
@@ -169,22 +168,22 @@ clis_start(clis_context *context) {
 
     // attempt to find jack ports that have been registered by other processes
     // and add them to the parameters array so they can be processed as inputs
-    for(i = 0; i < context->params->length; i++) {
+    for(i = 0; i < context->params_length; i++) {
 
-        parameter *param = context->params->params[i];
+        parameter param = context->params[i];
 
-        for(j = 0; j < param->mods.length; j++) {
+        for(j = 0; j < param.mods.length; j++) {
 
             jack_port_t *port = jack_port_by_name(context->client, 
-                    param->mods.sources[j].name);
+                    param.mods.sources[j].name);
 
             if(port == NULL)
                 continue;
 
-            param->mods.sources[j].port = port;
+            param.mods.sources[j].port = port;
 
             printf("INIT added mod source %s : %p\n", 
-                    param->mods.sources[j].name, param->mods.sources[j].port);
+                    param.mods.sources[j].name, param.mods.sources[j].port);
         }
     }
 

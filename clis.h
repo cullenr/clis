@@ -33,14 +33,10 @@ typedef struct parameter {
     mod_source_arr mods;
 } parameter;
 
-typedef struct parameter_arr {
-    size_t length;
-    parameter **params; // TODO : why not make this just a single pointer? 
-} parameter_arr;
-
 typedef struct clis_context {
-    parameter_arr *params;
-    jack_client_t *client;
+    size_t          params_length;
+    parameter       *params;
+    jack_client_t   *client;
 } clis_context;
 
 // lifecycle

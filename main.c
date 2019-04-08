@@ -18,21 +18,18 @@ parameter        freq = {
     .value = 200, 
     .mods = {0, NULL}
 };
-parameter_arr    params = {
-    .length = 1, 
-    .params = (parameter *[]){&freq}
-};
 clis_context context = {
-    .params = &params,
+    .params_length = 1,
+    .params = &freq,
     .client = NULL
 };
 
 static void
-die(int status)
+die()
 {
     int i;
-    for(i = 0; i < context.params->length; i++) {
-        clis_free_param_mods(params.params[i]);
+    for(i = 0; i < context.params_length; i++) {
+        clis_free_param_mods(&context.params[i]);
     }
 }
 
