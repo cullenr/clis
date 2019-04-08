@@ -1,3 +1,4 @@
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -6,6 +7,81 @@
 #include "clis.h"
 
 #define DEFAULT_PORT   "output"
+
+int is_running = 0;
+
+
+void
+clis_run()
+{
+    is_running = 1;
+    while(is_running) {
+        sleep(1);
+    }
+}
+
+static void
+signal_handler(int sig)
+{
+    is_running = 0;
+}
+
+static void
+jack_shutdown (void *arg)
+{
+    (void)arg;
+
+    fprintf(stderr, "jack server closed, quitting client\n");
+    // TODO :raise a sigint or somthing so we can break out of sigsuspend
+    is_running = 0;
+}
+
+clis_rc 
+clis_init_client(char *client_name, char *server_name, jack_client_t **client,
+        JackProcessCallback process_cb, void *process_cb_arg,
+        JackSampleRateCallback srate_cb, void *srate_cb_arg)
+{
+    jack_status_t   status;
+    jack_options_t  options = server_name
+        ? JackNullOption
+        : JackNullOption | JackServerName;
+
+    *client = jack_client_open(client_name, options, &status, server_name);
+
+    if (*client == NULL) {
+        // TODO: add verbose logging mode
+        // fprintf (stderr, "jack_client_open() failed, status = 0x%2.0x\n", 
+        //         status);
+        if (status & JackServerFailed) {
+            return CLIS_E_JACK_CONNECT;
+        } else {
+            return CLIS_E_JACK_CLIENT_OPEN;
+        }
+    } else if (status & JackNameNotUnique) {
+        return CLIS_E_NAME_TAKEN;
+    }
+
+    // signals server exited
+    jack_on_shutdown(*client, jack_shutdown, 0);
+
+    if(process_cb != NULL &&
+        jack_set_process_callback(*client, process_cb, process_cb_arg) != 0) {
+        return CLIS_E_JACK_CALLBACK;
+    }
+
+    if(srate_cb != NULL &&
+        jack_set_sample_rate_callback(*client, srate_cb, srate_cb_arg) != 0) {
+        return CLIS_E_JACK_CALLBACK;
+    }
+
+    // TODO: add error handlers
+    signal(SIGQUIT, signal_handler);
+    signal(SIGTERM, signal_handler);
+    signal(SIGHUP, signal_handler);
+    signal(SIGINT, signal_handler);
+
+    return CLIS_OK;
+}
 
 static void
 port_registered(jack_port_id_t port_id, int is_registering, void *arg)
@@ -75,31 +151,6 @@ add_mod_source(parameter *param)
     return &param->mods.sources[param->mods.length - 1];
 }
 
-clis_rc 
-clis_init_client(char *client_name, char *server_name, jack_client_t **client)
-{
-    jack_status_t   status;
-    jack_options_t  options = server_name
-        ? JackNullOption
-        : JackNullOption | JackServerName;
-    
-    *client = jack_client_open(client_name, options, &status, server_name);
-
-    if (*client == NULL) {
-        // TODO: add verbose logging mode
-        // fprintf (stderr, "jack_client_open() failed, status = 0x%2.0x\n", 
-        //         status);
-        if (status & JackServerFailed) {
-            return CLIS_E_JACK_CONNECT;
-        } else {
-            return CLIS_E_JACK_CLIENT_OPEN;
-        }
-    } else if (status & JackNameNotUnique) {
-        return CLIS_E_NAME_TAKEN;
-    }
-
-    return CLIS_OK;
-}
 
 clis_rc
 clis_start(clis_context *context) {
@@ -189,6 +240,8 @@ clis_rc_string(clis_rc rc)
             return "could not open jack client";
         case CLIS_E_JACK_CONNECT:
             return "unable to connect to JACK server";
+        case CLIS_E_JACK_CALLBACK:
+            return "unable add callback to JACK client";
         case CLIS_E_NAME_TAKEN:
             return "client name already taken";
         case CLIS_E_CLIENT_ACTIVATE:
@@ -298,7 +351,6 @@ clis_get_mod_buffer(jack_nframes_t nframes, mod_source_arr *mods)
                 out[j] += mod[j] * mods->sources[i].value * 44100;
             }
         }
-
     }
 
     return out;

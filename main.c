@@ -1,7 +1,6 @@
 #include <errno.h>
 #include <getopt.h>
 #include <math.h>
-#include <signal.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -24,7 +23,8 @@ parameter_arr    params = {
     .params = (parameter *[]){&freq}
 };
 clis_context context = {
-    .params = &params
+    .params = &params,
+    .client = NULL
 };
 
 static void
@@ -32,27 +32,8 @@ die(int status)
 {
     int i;
     for(i = 0; i < context.params->length; i++) {
-        printf("free dem params");
         clis_free_param_mods(params.params[i]);
     }
-
-    exit(status);
-}
-
-static void
-signal_handler(int sig)
-{
-    jack_client_close(context.client);
-    die(0);
-}
-
-static void
-jack_shutdown (void *arg)
-{
-    (void)arg;
-
-    fprintf(stderr, "jack server closed, quitting client\n");
-    die(1);
 }
 
 static float
@@ -127,8 +108,9 @@ int main (int argc, char *argv[])
             die(1);
         }
     }
+    data = tSawtoothInit();
 
-    rc = clis_init_client(client_name, server_name, &context.client);
+    rc = clis_init_client(client_name, server_name, &context.client, process, data, set_sample_rate, NULL);
     if(rc) {
         fprintf(stderr, "%s", clis_rc_string(rc));
         die(1);
@@ -136,13 +118,8 @@ int main (int argc, char *argv[])
 
     srand((unsigned int)time(NULL));
     OOPSInit((float)jack_get_sample_rate(context.client), &frandom);
-    data = tSawtoothInit();
 
-    jack_set_process_callback(context.client, process, data);
-    jack_set_sample_rate_callback(context.client, set_sample_rate, 0);
-    jack_on_shutdown(context.client, jack_shutdown, 0); // signals server exited
-
-    output_port = jack_port_register (context.client, "output",
+    output_port = jack_port_register(context.client, "output",
             JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
 
     if (output_port == NULL) {
@@ -156,14 +133,9 @@ int main (int argc, char *argv[])
         clis_play_audio(context.client, output_port);
     }
 
-    signal(SIGQUIT, signal_handler);
-    signal(SIGTERM, signal_handler);
-    signal(SIGHUP, signal_handler);
-    signal(SIGINT, signal_handler);
+    clis_run();
 
-    while(1) {
-        sleep(1);
-    }
-
-    // how did you get here?
+    jack_client_close(context.client);
+    die();
+    printf("exiting gracefully");
 }

@@ -10,6 +10,7 @@ typedef enum clis_rc {
     CLIS_E_ALLOC_MOD,
     CLIS_E_JACK_CLIENT_OPEN,
     CLIS_E_JACK_CONNECT,
+    CLIS_E_JACK_CALLBACK,
     CLIS_E_NAME_TAKEN,
     CLIS_E_CLIENT_ACTIVATE,
     CLIS_E_NO_OUTPUT_PORTS,
@@ -43,10 +44,13 @@ typedef struct clis_context {
 } clis_context;
 
 // lifecycle
-clis_rc     clis_init_client(char *client_name, char *server_name, 
-                             jack_client_t **client);
-clis_rc     clis_start(clis_context *ctx);
-clis_rc     clis_play_audio(jack_client_t *client, jack_port_t *output_port);
+clis_rc clis_init_client(char *client_name, char *server_name,
+            jack_client_t **client, 
+            JackProcessCallback process_cb, void *process_cb_arg, 
+            JackSampleRateCallback srate_cb, void *srate_cb_arg);
+
+clis_rc clis_start(clis_context *ctx);
+clis_rc clis_play_audio(jack_client_t *client, jack_port_t *output_port);
 
 // parameters
 clis_rc     clis_parse_param_string(char *arg, parameter *param);
