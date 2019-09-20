@@ -8,4 +8,4 @@
 
 read -n 1 -s -r -p "Press any key to continue\n"
 
-pkill -P $$
+pkill -2 -P $$

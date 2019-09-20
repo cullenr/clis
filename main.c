@@ -13,7 +13,18 @@
 
 #include "clis.h"
 
-jack_port_t     *output_port;
+typedef struct process_data {
+    tSawtooth       *saw;
+    tSquare         *sqr;
+    tTriangle       *tri;
+    tCycle          *sin;
+} process_data;
+
+jack_port_t     *saw_output_port;
+jack_port_t     *sqr_output_port;
+jack_port_t     *tri_output_port;
+jack_port_t     *sin_output_port;
+
 parameter        freq = {
     .value = 200, 
     .mods = {0, NULL}
@@ -24,6 +35,12 @@ clis_context context = {
     .client = NULL
 };
 
+// helper to allow us to call clis_close with no arguments with 'atexit'
+static void
+cleanup() {
+    clis_close(&context);
+}
+
 static float
 frandom(void)
 {
@@ -33,25 +50,45 @@ frandom(void)
 static int
 process(jack_nframes_t nframes, void *arg)
 {
-    jack_default_audio_sample_t *out, *mod;
-    tSawtooth *saw = (tSawtooth*)arg;
     unsigned int i;
+    jack_default_audio_sample_t *saw_out, *sqr_out, *tri_out, *sin_out, *mod;
+    process_data *data = (process_data*)arg;
+    float f = freq.value;
 
-    out = (jack_default_audio_sample_t*)jack_port_get_buffer(output_port, nframes);
+    saw_out = (jack_default_audio_sample_t*)jack_port_get_buffer(saw_output_port, nframes);
+    sqr_out = (jack_default_audio_sample_t*)jack_port_get_buffer(sqr_output_port, nframes);
+    tri_out = (jack_default_audio_sample_t*)jack_port_get_buffer(tri_output_port, nframes);
+    sin_out = (jack_default_audio_sample_t*)jack_port_get_buffer(sin_output_port, nframes);
+
     mod = clis_get_mod_buffer(nframes, &freq.mods);
 
-    // TODO: make saw a struct that contains a generic set freq function
-    // and a union of waveform types so that we can support multiple 
-    // waveforms more easily
     if(mod) {
         for(i = 0; i < nframes; i++) {
-            tSawtoothSetFreq(saw, freq.value + mod[i]);
-            out[i] = tSawtoothTick(saw);
+            f = freq.value + mod[i];
+
+            tSawtoothSetFreq(data->saw, f);
+            tSquareSetFreq(data->sqr, f);
+            tTriangleSetFreq(data->tri, f);
+            tCycleSetFreq(data->sin, f);
+
+            saw_out[i] = tSawtoothTick(data->saw);
+            sqr_out[i] = tSquareTick(data->sqr);
+            tri_out[i] = tTriangleTick(data->tri);
+            sin_out[i] = tCycleTick(data->sin);
         }
     } else {
-        tSawtoothSetFreq(saw, freq.value);
+        // Do this every frame? - do we may have a the last mod disconnected in
+        // the previous process call. That will leave us out of tune.
+        tSawtoothSetFreq(data->saw, f);
+        tSquareSetFreq(data->sqr, f);
+        tTriangleSetFreq(data->tri, f);
+        tCycleSetFreq(data->sin, f);
+
         for(i = 0; i < nframes; i++) {
-            out[i] = tSawtoothTick(saw);
+            saw_out[i] = tSawtoothTick(data->saw);
+            sqr_out[i] = tSquareTick(data->sqr);
+            tri_out[i] = tTriangleTick(data->tri);
+            sin_out[i] = tCycleTick(data->sin);
         }
     }
 
@@ -70,14 +107,29 @@ set_sample_rate(jack_nframes_t nframes, void *arg)
     return 0;
 }
 
+static int 
+register_output_port(jack_client_t *client, jack_port_t **port, const char *name)
+{
+    *port = jack_port_register(client, name,
+        JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
+
+    if (*port == NULL) {
+        fprintf(stderr, "could not register %s as output\n", name);
+        return 1;
+    }
+
+    return 0;
+}
+
 int main (int argc, char *argv[])
 {
     char      *client_name = "test";
     char      *server_name = NULL;
-    tSawtooth *data;
     int        opt;
     bool       play = false;
     clis_rc    rc = CLIS_OK;
+
+    atexit(&cleanup);
 
     while ((opt = getopt(argc, argv, "n:s:f:p")) != -1) {
         switch (opt) {
@@ -93,36 +145,41 @@ int main (int argc, char *argv[])
 
         if (rc) {
             fprintf(stderr, "%s:%s", optarg, clis_rc_string(rc));
-            goto end;
+            exit(EXIT_FAILURE);
         }
     }
-    data = tSawtoothInit();
 
+    process_data data = {
+        .saw = tSawtoothInit(),
+        .sqr = tSquareInit(),
+        .tri = tTriangleInit(),
+        .sin = tCycleInit()
+    };
     rc = clis_init_client(client_name, server_name, &context.client, process, 
-                          data, set_sample_rate, NULL);
+                          &data, set_sample_rate, NULL);
     if(rc) {
         fprintf(stderr, "%s", clis_rc_string(rc));
-        goto end;
+        exit(EXIT_FAILURE);
     }
 
     srand((unsigned int)time(NULL));
     OOPSInit((float)jack_get_sample_rate(context.client), &frandom);
 
-    output_port = jack_port_register(context.client, "output",
-            JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
-
-    if (output_port == NULL) {
-        fprintf(stderr, "no more JACK ports available\n");
-        goto end;
+    if(register_output_port(context.client, &saw_output_port, "saw") ||
+       register_output_port(context.client, &sqr_output_port, "sqr") ||
+       register_output_port(context.client, &tri_output_port, "tri") ||
+       register_output_port(context.client, &sin_output_port, "sin")) {
+        exit(EXIT_FAILURE);
     }
 
     clis_start(&context);
 
     if (play) {
-        clis_play_audio(context.client, output_port);
+        clis_play_audio(context.client, saw_output_port, sqr_output_port);
+        clis_play_audio(context.client, saw_output_port, sqr_output_port);
     }
+
     clis_run();
-end:
-    clis_close(&context);
-    printf("exiting gracefully");
+
+    printf("exiting gracefully\n");
 }

@@ -86,25 +86,32 @@ clis_init_client(char *client_name, char *server_name, jack_client_t **client,
 static void
 port_registered(jack_port_id_t port_id, int is_registering, void *arg)
 {
-    printf("PORT %s : %p, %i\n", is_registering ? "REGISTERED" : "UNREGISTER", 
-            port_id, is_registering);
-
-    unsigned int i, j;
     clis_context *context       = (clis_context *)arg;
     jack_port_t *port           = jack_port_by_id(context->client, port_id);
-    const char *name            = jack_port_name(port);
+
+    if(jack_port_is_mine(context->client, port)) {
+        return;
+    }
+
+    const char *port_name       = jack_port_name(port);
+    const char *client_name     = jack_get_client_name(context->client);
+    unsigned int i, j;
+
+    printf("%s %s on %s\n", port_name, 
+            is_registering ? "registered" : "unregistered", 
+            client_name);
 
     for(i = 0; i < context->params_length; i++) {
 
         parameter param = context->params[i];
-
+        printf("%s has %d mods configured\n", client_name, param.mods.length);
         for(j = 0; j < param.mods.length; j++) {
 
-            if(strcmp(param.mods.sources[j].name, name) == 0) {
+            if(strcmp(param.mods.sources[j].name, port_name) == 0) {
 
                 param.mods.sources[j].port = is_registering ? port : NULL;
-                printf("CALLBACK added mod source %s : %p\n", 
-                        param.mods.sources[j].name, port);
+                printf("CALLBACK added mod source %s to %s on port %p\n", 
+                        param.mods.sources[j].name, client_name, port);
             }
         }
     }
@@ -172,6 +179,7 @@ clis_start(clis_context *context) {
 
         parameter param = context->params[i];
 
+        printf("INTI %d mods\n", param.mods.length);
         for(j = 0; j < param.mods.length; j++) {
 
             jack_port_t *port = jack_port_by_name(context->client, 
@@ -197,7 +205,7 @@ clis_start(clis_context *context) {
  * cannot be connected if they are not running.
  */
 clis_rc
-clis_play_audio(jack_client_t *client, jack_port_t *output_port)
+clis_play_audio(jack_client_t *client, jack_port_t *output_port_l, jack_port_t *output_port_r)
 {
     const char **ports = jack_get_ports(client, NULL, NULL, 
             JackPortIsPhysical|JackPortIsInput);
@@ -206,11 +214,11 @@ clis_play_audio(jack_client_t *client, jack_port_t *output_port)
         return CLIS_E_NO_OUTPUT_PORTS;
     }
 
-    if (jack_connect (client, jack_port_name(output_port), ports[0])) {
+    if (jack_connect (client, jack_port_name(output_port_l), ports[0])) {
         return CLIS_E_CONNECT_OUTPUT_PORT;
     }
 
-    if (jack_connect (client, jack_port_name(output_port), ports[1])) {
+    if (jack_connect (client, jack_port_name(output_port_r), ports[1])) {
         return CLIS_E_CONNECT_OUTPUT_PORT;
     }
 
@@ -370,6 +378,7 @@ clis_close(clis_context *ctx)
     size_t i, j;
     // client may not be initialised 
     if(ctx->client) {
+        printf("closing client\n");
         jack_client_close(ctx->client);
     }
 

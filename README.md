@@ -103,4 +103,10 @@ lfo | seq
 lfo | osc
 ```
 
+## OCS TODO
 
+1. add extra outputs for the other wavesforms
+1. make clis automatically connect all outputs to hardware inputs if the play
+   flag is passed.
+1. add a callback for connected ports - use it to render samples to the
+   connected outputs and skip the disconnected ones

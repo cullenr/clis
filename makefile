@@ -4,7 +4,7 @@ SRC := $(shell find . -name '*.c')
 OBJ := $(SRC:.c=.o)
 DEP := $(SRC:.c=.d)
 
-INC_DIRS := $(shell find $(SRC_DIRS) -type d)
+INC_DIRS := $(shell find lib -type d)
 INC_FLAGS := $(addprefix -I,$(INC_DIRS))
 
 CFLAGS := -Wall -Wextra -std=c99 -O3
@@ -20,6 +20,7 @@ main: $(OBJ)
 
 .PHONY: clean
 
+# print-%  : ; @echo $* = $($*)
 clean:
 	$(RM) $(OBJ)	# remove object files
 	$(RM) $(DEP)	# remove dependency files

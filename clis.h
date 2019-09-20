@@ -46,13 +46,14 @@ clis_rc clis_init_client(char *client_name, char *server_name,
             JackSampleRateCallback srate_cb, void *srate_cb_arg);
 
 clis_rc clis_start(clis_context *ctx);
-clis_rc clis_play_audio(jack_client_t *client, jack_port_t *output_port);
+clis_rc clis_play_audio(jack_client_t *client, jack_port_t *output_port_l, jack_port_t *output_port_r);
 
 // parameters
 clis_rc     clis_parse_param_string(char *arg, parameter *param);
 jack_default_audio_sample_t *clis_get_mod_buffer(jack_nframes_t nframes, 
                                                  mod_source_arr *mods);
 void        clis_close(clis_context *ctx);
+
 // status codes
 const char  *clis_rc_string(clis_rc rc);
 #endif // CLIS_INC
