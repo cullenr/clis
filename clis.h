@@ -50,10 +50,9 @@ clis_rc clis_play_audio(jack_client_t *client, jack_port_t *output_port);
 
 // parameters
 clis_rc     clis_parse_param_string(char *arg, parameter *param);
-void        clis_free_param_mods(parameter *param);
 jack_default_audio_sample_t *clis_get_mod_buffer(jack_nframes_t nframes, 
                                                  mod_source_arr *mods);
-
+void        clis_close(clis_context *ctx);
 // status codes
 const char  *clis_rc_string(clis_rc rc);
 #endif // CLIS_INC

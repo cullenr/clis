@@ -24,15 +24,6 @@ clis_context context = {
     .client = NULL
 };
 
-static void
-die()
-{
-    int i;
-    for(i = 0; i < context.params_length; i++) {
-        clis_free_param_mods(&context.params[i]);
-    }
-}
-
 static float
 frandom(void)
 {
@@ -102,15 +93,16 @@ int main (int argc, char *argv[])
 
         if (rc) {
             fprintf(stderr, "%s:%s", optarg, clis_rc_string(rc));
-            die(1);
+            goto end;
         }
     }
     data = tSawtoothInit();
 
-    rc = clis_init_client(client_name, server_name, &context.client, process, data, set_sample_rate, NULL);
+    rc = clis_init_client(client_name, server_name, &context.client, process, 
+                          data, set_sample_rate, NULL);
     if(rc) {
         fprintf(stderr, "%s", clis_rc_string(rc));
-        die(1);
+        goto end;
     }
 
     srand((unsigned int)time(NULL));
@@ -121,7 +113,7 @@ int main (int argc, char *argv[])
 
     if (output_port == NULL) {
         fprintf(stderr, "no more JACK ports available\n");
-        die(1);
+        goto end;
     }
 
     clis_start(&context);
@@ -129,10 +121,8 @@ int main (int argc, char *argv[])
     if (play) {
         clis_play_audio(context.client, output_port);
     }
-
     clis_run();
-
-    jack_client_close(context.client);
-    die();
+end:
+    clis_close(&context);
     printf("exiting gracefully");
 }

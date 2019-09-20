@@ -74,7 +74,7 @@ clis_init_client(char *client_name, char *server_name, jack_client_t **client,
         return CLIS_E_JACK_CALLBACK;
     }
 
-    // TODO: add error handlers
+    // TODO: switch to sigaction
     signal(SIGQUIT, signal_handler);
     signal(SIGTERM, signal_handler);
     signal(SIGHUP, signal_handler);
@@ -356,18 +356,27 @@ clis_get_mod_buffer(jack_nframes_t nframes, mod_source_arr *mods)
 }
 
 /**
- *  free the parameters dynamically allocated modulation sources but not the
- *  parameter itself.
+ *  free the jack client if it exists.
  *
- *  @param - the parameter to free
+ *  free the parameters dynamically allocated modulation sources but not the
+ *  parameter itself these are staticly allocated.
+ *
+ *  @param - the context to free
  */
-void 
-clis_free_param_mods(parameter *param)
-{
-    unsigned int i;
-    for(i = 0; i < param->mods.length; i++) {
-        free(param->mods.sources[i].name);
-    }
-    free(param->mods.sources);
-}
 
+void
+clis_close(clis_context *ctx)
+{
+    size_t i, j;
+    // client may not be initialised 
+    if(ctx->client) {
+        jack_client_close(ctx->client);
+    }
+
+    for(i = 0; i < ctx->params_length; i++) {
+        for(j = 0; j < ctx->params[i].mods.length; j++) {
+            free(ctx->params[i].mods.sources[j].name);
+        }
+        free(ctx->params[i].mods.sources);
+    }
+}
